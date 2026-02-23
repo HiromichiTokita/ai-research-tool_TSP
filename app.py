@@ -138,11 +138,38 @@ elif st.session_state.step == 3:
                 mime="text/plain"
             )
 
-            # URL専用ボックス
+            # === 【大改修】URLを1500文字ごとに分割して表示する機能 ===
             st.write("---")
-            st.subheader("🔗 NotebookLM入力用 ソースURLリスト")
-            st.info("💡 右上の「コピー」アイコン（📋）を押すと、下のURLリストをすべてコピーできます！")
-            st.code(urls_text, language="text")
+            st.subheader("🔗 NotebookLM入力用 ソースURLリスト（分割コピー版）")
+            st.info("💡 NotebookLMの文字数制限（約1500文字）に合わせて、URLを最適なサイズで分割しています。右上から1ブロックずつコピーして貼り付けてください！")
+
+            # URLを1行ずつリストにする（空行は除外）
+            url_list = [url.strip() for url in urls_text.split('\n') if url.strip()]
+            
+            chunks = []
+            current_chunk = []
+            current_length = 0
+            MAX_LEN = 1500  # 1ブロックの最大文字数目安
+
+            for url in url_list:
+                # 次のURLを足すと1500文字を超える場合は、今のブロックを保存して新しいブロックを作る
+                if current_length + len(url) > MAX_LEN and current_chunk:
+                    chunks.append("\n".join(current_chunk))
+                    current_chunk = [url]
+                    current_length = len(url)
+                else:
+                    current_chunk.append(url)
+                    current_length += len(url) + 1 # +1は改行の分
+
+            # 最後の余ったブロックを保存
+            if current_chunk:
+                chunks.append("\n".join(current_chunk))
+
+            # 分割したブロックごとに st.code を使ってコピーボタンを表示
+            for i, chunk in enumerate(chunks):
+                st.write(f"**【コピー用 第{i+1}グループ】** （約{len(chunk)}文字）")
+                st.code(chunk, language="text")
+            # ========================================================
 
             # === 実行が成功したら、現在時刻を記録する ===
             now_str = datetime.now(JST).strftime("%Y/%m/%d %H:%M:%S")
