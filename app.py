@@ -1,12 +1,18 @@
 import streamlit as st
 from google import genai
 from google.genai import types
+import os
+from datetime import datetime, timedelta, timezone
 
 # ==========================================
 # 初期設定
 # ==========================================
-# 取得したAPIキーをここに貼り付けてください
-API_KEY = "AIzaSyCUyxUUpADh-UBtMxAiC6YV3C-ifqKx234"
+# JST（日本時間）の設定と記録ファイル名
+JST = timezone(timedelta(hours=+9), 'JST')
+RECORD_FILE = "last_run.txt"
+
+# クラウドの秘密の金庫からキーを読み込む設定（絶対に実際のキーは書かない！）
+API_KEY = st.secrets["GEMINI_API_KEY"]
 client = genai.Client(api_key=API_KEY)
 
 # ==========================================
@@ -20,6 +26,15 @@ if "step" not in st.session_state:
     st.session_state.extra_request = ""
 
 st.title("NotebookLM向け 深掘りリサーチツール 📚🌍")
+
+# === 前回実行日時の表示 ===
+last_run = "まだ記録がありません"
+if os.path.exists(RECORD_FILE):
+    with open(RECORD_FILE, "r", encoding="utf-8") as f:
+        last_run = f.read().strip()
+
+st.info(f"🕒 前回の検索実行日時: **{last_run}**\n\n💡 APIの制限（429エラー）を避けるため、前回から「20分」程度空けてのご利用をおすすめします。")
+st.write("---")
 
 # ==========================================
 # UIと処理の分岐
@@ -71,7 +86,6 @@ elif st.session_state.step == 3:
     with st.spinner('🌐 英語・日本語の文献を検索し、詳細なレポートを執筆中です...（1分ほどかかります）'):
         user_info = f"【テーマ】\n{st.session_state.theme}\n\n【選択したリサーチ方針】\n{st.session_state.selected_proposal}\n\n【追加の要望】\n{st.session_state.extra_request}"
 
-        # ▼▼▼ 変更：URLだけを独立したタグ [URLS] に出力させる ▼▼▼
         prompt = f"""
         あなたは世界トップクラスのシニアリサーチャーです。以下のユーザーの要望をもとに、Google検索を駆使して「極めて詳細で深掘りされた」プロレベルのレポートを作成してください。
         
@@ -103,7 +117,7 @@ elif st.session_state.step == 3:
             
             raw_text = response.text.strip()
             
-            # ▼▼▼ 変更：AIの出力を「本文」と「URLリスト」に切り分ける ▼▼▼
+            # AIの出力を「本文」と「URLリスト」に切り分ける
             if '[CONTENT]' in raw_text and '[URLS]' in raw_text:
                 content_text = raw_text.split('[CONTENT]')[1].split('[URLS]')[0].strip()
                 urls_text = raw_text.split('[URLS]')[1].strip()
@@ -124,13 +138,17 @@ elif st.session_state.step == 3:
                 mime="text/plain"
             )
 
-            # ▼▼▼ 追加：ワンクリックでコピーできるURL専用ボックス ▼▼▼
+            # URL専用ボックス
             st.write("---")
             st.subheader("🔗 NotebookLM入力用 ソースURLリスト")
             st.info("💡 右上の「コピー」アイコン（📋）を押すと、下のURLリストをすべてコピーできます！")
-            
-            # st.code を使うと、プログラミングコードのように表示され、自動でコピーボタンが付きます
             st.code(urls_text, language="text")
+
+            # === 実行が成功したら、現在時刻を記録する ===
+            now_str = datetime.now(JST).strftime("%Y/%m/%d %H:%M:%S")
+            with open(RECORD_FILE, "w", encoding="utf-8") as f:
+                f.write(now_str)
+            # ====================================================
 
         except Exception as e:
             st.error("データの生成または解析に失敗しました。もう一度お試しください。")
